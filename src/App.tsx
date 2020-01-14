@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import './App.css';
+import '../node_modules/bootstrap/scss/bootstrap.scss';
 import { GoogleContext } from './contexts/GoogleContext';
-import { Button } from 'reactstrap';
+import { Button, Container } from 'reactstrap';
 import { Calendar } from './List';
 
 const App: React.FC = () => {
@@ -35,7 +35,7 @@ const App: React.FC = () => {
       });
       const googleUser = GoogleAuth.currentUser.get();
       setAuthenticated(googleUser.isSignedIn());
-      console.log(googleUser.getBasicProfile());
+      // console.log(googleUser.getBasicProfile());
     }
     script.onload = () => {
       gapi.load('client:auth2', initClient);
@@ -68,7 +68,9 @@ const App: React.FC = () => {
             </Button>
         }
       </div>
-      <Calendar />
+      <Container>
+        <Calendar />
+      </Container>
     </GoogleContext.Provider>
   );
 }

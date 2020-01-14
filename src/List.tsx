@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { GoogleContext } from './contexts/GoogleContext';
 import * as dateFns from 'date-fns';
 import lodash from 'lodash';
+import * as aizattoDateFns from '@aizatto/date-fns';
+import styles from './styles/styles.module.scss';
 
 const day = new Date();
 const timeMin = dateFns.startOfDay(day);
@@ -24,15 +26,28 @@ const Attendees: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
     return a.email.localeCompare(b.email);
   });
 
-  const attendeesElement = attendees.map(attendee => 
-    <li key={`${event.id}:${attendee.email}`}>
-      {attendee.displayName ? attendee.displayName : attendee.email}
-    </li>
-  );
+  const declined = attendees.filter(attendee => attendee.responseStatus === "declined");
+
+  const attendeesElement = attendees.map(attendee =>  {
+    const style = attendee.responseStatus === "declined"
+      ? {textDecoration: "line-through"}  
+      : {};
+
+    const name = attendee.displayName ? attendee.displayName : attendee.email;
+
+    return (
+      <li
+        key={`${event.id}:${attendee.email}`}
+        style={style}
+        title={`${name}: ${attendee.responseStatus}`}>
+        {name}
+      </li>
+    );
+  });
 
   return (
     <>
-      Attendees:
+      Attendees: {attendees.length - declined.length}/{attendees.length}
       <ol>
         {attendeesElement}
       </ol>
@@ -40,14 +55,143 @@ const Attendees: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
   );
 }
 
+const DateTime: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
+  const event = props.event;
+  if (!event.start.dateTime ||
+      !event.end.dateTime) {
+    return <></>
+  }
+
+  const startDateTime =  new Date(event.start.dateTime);
+  const endDateTime = new Date(event.end.dateTime);
+
+  return (
+    <span title={`${event.start.dateTime} - ${event.end.dateTime}`}>
+      {dateFns.format(startDateTime, 'HH:mm')}
+      {' - '}
+      {dateFns.format(endDateTime, 'HH:mm')}
+    </span>
+  );
+}
+
+const Intervals: React.FC<{intervals: {start: Date, end: Date}[]}> = (props) => {
+  const elements = props.intervals.map(interval => {
+    const seconds = (interval.end.getTime() - interval.start.getTime()) / 1000;
+
+    const isPast = dateFns.isPast(interval.end);
+
+    const style = isPast
+      ? {textDecoration: "line-through"}  
+      : {};
+
+    const className = isPast
+      ? 'text-muted'
+      : undefined;
+
+    return (
+      <li key={interval.start.toISOString()} className={className} style={style}>
+        {dateFns.format(interval.start, 'HH:mm')} - {dateFns.format(interval.end, 'HH:mm')}
+        {': '}
+        {IntervalTime(seconds)}
+      </li>
+    )
+  });
+
+  return (
+    <ol>
+      {elements}
+    </ol>
+  )
+}
+
+const IntervalBlock: React.FC<{intervals: { start: Date, end: Date }[]}> = (props) => {
+  const intervals = props.intervals;
+  const remainingIntervals = intervals.filter(interval => dateFns.isFuture(interval.end));
+  const remaining = aizattoDateFns.intervalsTotal(remainingIntervals);
+
+  let remainingElement: any = IntervalTime(remaining / 1000);
+
+  if (remainingIntervals.length !== intervals.length){
+    remainingElement = <span className="text-muted">{remainingElement}</span>;
+  }
+
+  const time = remainingElement.length !== 0
+    ?
+      <>
+        {remainingElement}
+        {' / '}
+        {IntervalTime(aizattoDateFns.intervalsTotal(intervals) / 1000)}
+      </>
+    : null;
+
+  return (
+    <>
+    {' '}
+    {time}
+    <Intervals intervals={intervals} />
+    </>
+  );
+}
+
+const IntervalTime = (seconds: number) => {
+  const hours = Math.floor(seconds / (60 * 60));
+  const minutes = Math.floor(seconds / 60) % 60;
+
+  let time = [];
+
+  if (hours > 1) {
+    time.push(`${hours} hours`)
+  } else if (hours === 1) {
+    time.push(`${hours} hour`)
+  }
+
+  if (minutes > 1) {
+    time.push(`${minutes} minutes`)
+  } else if (minutes === 1) {
+    time.push(`${minutes} minute`)
+  }
+
+  return time.join(' ');
+}
+
 const Event: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
   const event = props.event;
+  const [collapsed, setCollapsed] = useState(() => {
+    if (event.status === "cancelled") {
+      return true;
+    }
 
-  const start = event.start.dateTime
-    ? <span title={event.start.dateTime}>
-        {dateFns.format(new Date(event.start.dateTime), 'HH:mm')}
-      </span>
-    : null;
+    // @ts-ignore
+    if (dateFns.isPast(new Date(event.end.dateTime))) {
+      return true;
+    }
+
+    return event.attendees?.findIndex(attendee => attendee.self && attendee.responseStatus === "declined") !== -1;
+  });
+
+
+  const summary = 
+    <>
+      <DateTime event={event} />
+      {' '}
+      <a href={event.htmlLink}>{event.summary}</a>
+    </>;
+
+  if (collapsed) {
+    return (
+      <>
+        <span style={{textDecoration: "line-through"}}>
+          {summary}
+        </span>
+        {' '}
+        &middot;
+        {' '}
+        <span className="text-muted" style={{cursor: 'pointer'}} onClick={() => setCollapsed(false)}>
+          Show Details
+        </span>
+      </>
+    )
+  }
 
   const hangoutButton = event.hangoutLink
     ? <a href={event.hangoutLink}>Hangout Link</a>
@@ -60,20 +204,38 @@ const Event: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
   return (
     <>
       <div>
-        {start} <a href={event.htmlLink}>{event.summary}</a>
+        {summary}
       </div>
       {locationElement}
 
       <Attendees event={event} />
 
-      <div dangerouslySetInnerHTML={{__html: event.description}} />
+      <div className={styles.description} dangerouslySetInnerHTML={{__html: event.description}} />
 
       {hangoutButton}
     </>
   );
 }
 
+// const CalendarList: React.FC<{calendars: gapi.client.calendar.CalendarListEntry[]}> = (props) => {
+//   const elements = props.calendars.map((calendar) => {
+//     return (
+//       <li key={calendar.id}>
+//       </li>
+//     )
+//   })
+
+//   return (
+//     <>
+//       <ol>
+//         {elements}
+//       </ol>
+//     </>
+//   );
+// }
+
 export const CalendarAuthenticated: React.FC = (props) => {
+  // const [calendars, setCalendars] = useState<gapi.client.calendar.CalendarListEntry[]>([]);
   const [events, setEvents] = useState<gapi.client.calendar.Event[]>([]);
   useEffect(() => {
     (async () => {
@@ -86,12 +248,18 @@ export const CalendarAuthenticated: React.FC = (props) => {
         singleEvents: true,
       });
       setEvents(events.result.items);
+
+      // const calendars = await gapi.client.calendar.calendarList.list();
+      // setCalendars(calendars.result.items);
     })();
   }, []);
 
   const eventsFiltered = events.filter(
     (event) => {
-      if (event.status === 'cancelled') {
+      // if (event.status === 'cancelled') {
+      //   return false;
+      // }
+      if (!event.start.dateTime || !event.end.dateTime) {
         return false;
       }
       
@@ -113,7 +281,37 @@ export const CalendarAuthenticated: React.FC = (props) => {
       return dateFns.startOfDay(new Date(event.start.dateTime))
     });
   
-  const days = lodash.map(eventsGroupBy, (events, date) => {
+  const days = lodash.map(eventsGroupBy, (events, dateStr) => {
+    // console.log({dateStr, events});
+    const date = new Date(dateStr);
+    const intervals = events.filter(event => {
+      if (event.status === 'cancelled') {
+        return false;
+      }
+
+      if (!event.start.dateTime || !event.end.dateTime) {
+        return false;
+      }
+
+      return event.attendees?.findIndex(attendee => attendee.self && attendee.responseStatus === "declined") === -1;
+    }).map(event => {
+      return {
+        // @ts-ignore
+        start: new Date(event.start.dateTime),
+        // @ts-ignore
+        end: new Date(event.end.dateTime),
+      }
+    });
+
+    const busyIntervals = aizattoDateFns.mergeIntervals(intervals);
+    const freeIntervals = aizattoDateFns.oppositeIntervals(
+      {
+        start: dateFns.startOfDay(date),
+        end: dateFns.endOfDay(date),
+      },
+      busyIntervals,
+    );
+
     const eventsElements = events.map(event => {
       return (
         <li key={event.id} style={{paddingBottom: '1rem'}}>
@@ -123,8 +321,16 @@ export const CalendarAuthenticated: React.FC = (props) => {
     });
 
     return (
-      <React.Fragment key={date}>
-        <h5>{dateFns.format(new Date(date), 'EEEE yyyy-MM-dd')}</h5>
+      <React.Fragment key={dateStr}>
+        <h5>{dateFns.format(date, 'EEEE yyyy-MM-dd')}</h5>
+
+        Busy: 
+        <IntervalBlock intervals={busyIntervals} />
+
+        Free: 
+        <IntervalBlock intervals={freeIntervals} />
+
+        Schedule: {eventsElements.length} {eventsElements.length > 1 ? 'events' : 'event'}
         <ol>
           {eventsElements}
         </ol>
@@ -134,6 +340,7 @@ export const CalendarAuthenticated: React.FC = (props) => {
 
   return (
     <>
+      <a href="https://calendar.google.com/">Google Calendar</a>
       {days}
     </>
   )
