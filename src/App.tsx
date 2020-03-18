@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import '../node_modules/bootstrap/scss/bootstrap.scss';
+import './App.css';
 import { GoogleContext } from './contexts/GoogleContext';
-import { Button, Container } from 'reactstrap';
 import { Calendar } from './List';
+
+import { Button, Layout } from 'antd';
+const { Content } = Layout;
 
 const App: React.FC = () => {
   const [authenticated, setAuthenticated] = useState(false);
@@ -58,19 +60,21 @@ const App: React.FC = () => {
 
   return (
     <GoogleContext.Provider value={{authenticated}}>
-      <div className="App">
-        {!authenticated
-          ? <Button onClick={signIn}>
-              Sign In
-            </Button>
-          : <Button onClick={signOut}>
-              Sign out
-            </Button>
-        }
-      </div>
-      <Container>
-        <Calendar />
-      </Container>
+      <Layout style={{background: '#fff'}}>
+        <Content>
+          <div className="App">
+            {!authenticated
+              ? <Button onClick={signIn}>
+                  Sign In
+                </Button>
+              : <Button onClick={signOut}>
+                  Sign out
+                </Button>
+            }
+          </div>
+          <Calendar />
+        </Content>
+      </Layout>
     </GoogleContext.Provider>
   );
 }

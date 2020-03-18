@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleContext } from './contexts/GoogleContext';
 import * as dateFns from 'date-fns';
-import lodash from 'lodash';
 import * as aizattoDateFns from '@aizatto/date-fns';
 import styles from './styles/styles.module.scss';
+import { DatePicker } from 'antd';
+import moment from 'moment';
+
+const { RangePicker } = DatePicker;
 
 const day = new Date();
-const timeMin = dateFns.startOfDay(day);
-const timeMax = dateFns.endOfDay(dateFns.addDays(day, 5));
+// const defaultTimeMin = dateFns.startOfDay(day);
+// const defaultTimeMax = dateFns.endOfDay(dateFns.addDays(day, 5));
 
 const Attendees: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
   const event = props.event;
@@ -235,6 +238,9 @@ const Event: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
 // }
 
 export const CalendarAuthenticated: React.FC = (props) => {
+  const [timeMin, setTimeMin] = useState(() => dateFns.startOfDay(day));
+  const [timeMax, setTimeMax] = useState(() => dateFns.endOfDay(dateFns.addDays(day, 5)));
+
   // const [calendars, setCalendars] = useState<gapi.client.calendar.CalendarListEntry[]>([]);
   const [events, setEvents] = useState<gapi.client.calendar.Event[]>([]);
   useEffect(() => {
@@ -252,15 +258,16 @@ export const CalendarAuthenticated: React.FC = (props) => {
       // const calendars = await gapi.client.calendar.calendarList.list();
       // setCalendars(calendars.result.items);
     })();
-  }, []);
+  }, [timeMin, timeMax]);
 
   const eventsFiltered = events.filter(
     (event) => {
       // if (event.status === 'cancelled') {
       //   return false;
       // }
-      if (!event.start.dateTime || !event.end.dateTime) {
-        return false;
+      if (event.end.date) {
+        const endDateTime = dateFns.endOfDay(new Date(event.end.date));
+        return dateFns.isAfter(endDateTime, timeMin);
       }
       
       if (event.end.dateTime &&
@@ -272,17 +279,38 @@ export const CalendarAuthenticated: React.FC = (props) => {
     }
   );
 
-  const eventsGroupBy = lodash.groupBy(
-    eventsFiltered,
+  /**
+   * lodash.groupBy doesn't work for multi day events
+   */
+  const eventsGroupBy = new Map<string, gapi.client.calendar.Event[]>();
+  // const eventsGroupBy = lodash.groupBy(
+  eventsFiltered.forEach(
     (event) => {
-      if (!event.start.dateTime) {
-        return null;
+      const start = event.start.date ?? event.start.dateTime;
+      const end = event.end.date ?? event.end.dateTime;
+
+      if (!start || !end) {
+        return;
       }
-      return dateFns.startOfDay(new Date(event.start.dateTime))
+
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      const dates = dateFns.eachDayOfInterval({
+        start: startDate,
+        end: endDate,
+      });
+
+      dates.forEach(date => {
+        const key = date.toISOString();
+        const events = eventsGroupBy.get(key) ?? [];
+        events.push(event);
+        if (!eventsGroupBy.has(key)) {
+          eventsGroupBy.set(key, events);
+        }
+      })
     });
   
-  const days = lodash.map(eventsGroupBy, (events, dateStr) => {
-    // console.log({dateStr, events});
+  const days = Array.from(eventsGroupBy).map(([dateStr, events]) => {
     const date = new Date(dateStr);
     const intervals = events.filter(event => {
       if (event.status === 'cancelled') {
@@ -341,6 +369,15 @@ export const CalendarAuthenticated: React.FC = (props) => {
   return (
     <>
       <a href="https://calendar.google.com/">Google Calendar</a>
+      <div>
+        <RangePicker
+          defaultValue={[moment(timeMin), moment(timeMax)]}
+          onChange={(dates) => {
+            setTimeMin(dates[0]!.toDate());
+            setTimeMax(dates[1]!.toDate());
+          }}
+        />
+      </div>
       {days}
     </>
   )
