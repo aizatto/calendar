@@ -3,9 +3,9 @@ import { GoogleContext } from './contexts/GoogleContext';
 import * as dateFns from 'date-fns';
 import * as aizattoDateFns from '@aizatto/date-fns';
 import styles from './styles/styles.module.scss';
-import { DatePicker, Icon } from 'antd';
+import { DatePicker } from 'antd';
 import moment from 'moment';
-import copy from 'copy-to-clipboard';
+import { ConferenceComponent } from './components/Conference';
 
 const { RangePicker } = DatePicker;
 
@@ -197,19 +197,7 @@ const Event: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
     )
   }
 
-  const hangoutButton = event.hangoutLink
-    ? <span>
-        Video Call:
-        {' '}
-        <a href={event.hangoutLink}>
-          {event.hangoutLink}
-        </a>
-        {' '}
-        <span onClick={() => event.hangoutLink && copy(event.hangoutLink)} style={{cursor: "pointer"}}>
-          <Icon type="copy"/>
-        </span>
-      </span>
-    : <span style={{textDecoration: 'line-through'}}>Hangout Link</span>
+  const hangoutButton = <ConferenceComponent event={event} />;
 
   const locationElement = event.location
     ? <div>{event.location}</div>
