@@ -1,6 +1,6 @@
 import React from 'react';
 import copy from 'copy-to-clipboard';
-import { Icon } from 'antd';
+import { Button } from 'antd';
 
 interface ConferenceData {
   entryPoints: {
@@ -30,17 +30,37 @@ export function conference(event: gapi.client.calendar.Event) {
 export const ConferenceComponent: React.FC<{event: gapi.client.calendar.Event}> = (props) => {
   const url = conference(props.event);
 
-  return url
-    ? <span>
-        Video Call:
-        {' '}
-        <a href={url}>
-          {url}
-        </a>
-        {' '}
-        <span onClick={() => url && copy(url)} style={{cursor: "pointer"}}>
-          <Icon type="copy"/>
-        </span>
-      </span>
-    : <span style={{textDecoration: 'line-through'}}>Video Call</span>
+  if (!url) {
+    return <span style={{textDecoration: 'line-through'}}>Video Call</span>;
+  }
+
+  const { event } = props;
+
+  const message = [
+    `@here ${event.summary}`,
+    url,
+    event.description,
+  ].join("\n\n");
+
+  return (
+    <span>
+      Video Call:
+      {' '}
+      <a href={url}>
+        {url}
+      </a>
+
+      <Button.Group>
+        <Button icon="video-camera" href={url}>
+          Video Call
+        </Button>
+        <Button icon="copy" href={url} onClick={() => copy(url)}>
+          Copy URL
+        </Button>
+        <Button icon="copy" onClick={() => copy(message)}>
+          Copy as Message
+        </Button>
+      </Button.Group>
+    </span>
+  )
 }
