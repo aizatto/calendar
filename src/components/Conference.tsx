@@ -1,6 +1,7 @@
 import React from 'react';
 import copy from 'copy-to-clipboard';
 import { Button } from 'antd';
+import htmlToText from 'html-to-text';
 
 interface ConferenceData {
   entryPoints: {
@@ -39,28 +40,29 @@ export const ConferenceComponent: React.FC<{event: gapi.client.calendar.Event}> 
   const message = [
     `@here ${event.summary}`,
     url,
-    event.description,
+    htmlToText.fromString(event.description),
   ].join("\n\n");
 
   return (
     <span>
-      Video Call:
-      {' '}
-      <a href={url}>
-        {url}
-      </a>
-
       <Button.Group>
         <Button icon="video-camera" href={url}>
           Video Call
         </Button>
-        <Button icon="copy" href={url} onClick={() => copy(url)}>
+        <Button icon="copy" onClick={() => copy(url)}>
           Copy URL
         </Button>
         <Button icon="copy" onClick={() => copy(message)}>
-          Copy as Message
+          Copy as Slack Message
         </Button>
       </Button.Group>
+      <div>
+        Video Call:
+        {' '}
+        <a href={url}>
+          {url}
+        </a>
+      </div>
     </span>
   )
 }
